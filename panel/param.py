@@ -6,6 +6,7 @@ import inspect
 import itertools
 import json
 import os
+from re import S
 import sys
 import types
 
@@ -138,6 +139,11 @@ class Param(PaneBase):
     show_name = param.Boolean(default=True, doc="""
         Whether to show the parameterized object's name""")
 
+    sorted = param.Parameter(default=False, doc="""
+    If True the widgets will be sorted alphabetically by label. If a callable is provided
+    it will be used to sort the Parameters, for example lambda x: x[1].label[::-1] will sort by the
+    reversed label.""")
+
     width = param.Integer(default=300, allow_None=True, bounds=(0, None), doc="""
         Width of widgetbox the parameter widgets are displayed in.""")
 
@@ -259,7 +265,7 @@ class Param(PaneBase):
                     # Setting object will trigger this method a second time
                     self.object = event.new.cls if event.new.self is None else event.new.self
                     return
-                
+
                 if self._explicit_parameters:
                     parameters = self.parameters
                 elif event.new is None:
@@ -573,6 +579,15 @@ class Param(PaneBase):
     def _ordered_params(self):
         params = [(p, pobj) for p, pobj in self.object.param.objects('existing').items()
                   if p in self.parameters or p == 'name']
+        if self.sorted is True or callable(self.sorted):
+            if callable(self.sorted):
+                key_fn = self.sorted
+            else:
+                key_fn = lambda x: x[1].label
+            sorted_params = sorted(params, key=key_fn)
+            sorted_params = [el[0] for el in sorted_params if (el[0] != 'name' or el[0] in self.parameters)]
+            return sorted_params
+
         key_fn = lambda x: x[1].precedence if x[1].precedence is not None else self.default_precedence
         sorted_precedence = sorted(params, key=key_fn)
         filtered = [(k, p) for k, p in sorted_precedence]
@@ -609,7 +624,7 @@ class Param(PaneBase):
                 watchers.append(w)
         self._widgets[p_name] = self.widget(p_name)
         self._rerender()
-    
+
     def _get_widgets(self):
         """Return name,widget boxes for all parameters (i.e., a property sheet)"""
         # Format name specially
